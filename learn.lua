@@ -15,7 +15,7 @@ local net_opts = {
 }
 local train_opts = {
    shuffle = false,
-   epochs = 1,
+   epochs = 35000,
    learning_rate = 0.1,
    log_freq = 0.01
 }

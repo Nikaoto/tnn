@@ -1,5 +1,15 @@
 -- util
 
+function cmp_arr(arr1, arr2, eq_fn)
+   local diff = {}
+   for k, v in pairs(arr1) do
+      if eq_fn(arr2[k], v) == false then
+         table.insert(diff, {key = k, bp = v, grad = arr2[k]})
+      end
+   end
+   return diff
+end
+
 function shuffle(arr)
    for i=#arr, 1, -1 do
       local j = math.random(1, i)

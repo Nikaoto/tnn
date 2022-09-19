@@ -1,7 +1,7 @@
 local inspect = require("inspect")
 require("util")
 
-k=true
+k=false
 function printk(msg)
    if k then print(msg) end
 end
@@ -120,8 +120,17 @@ function train(net, training_data, opts)
          avg_loss = avg_loss + loss / #training_data
 
          -- backprop
-         bp(net, data, learning_rate)
-         grad(net, data, learning_rate, step)
+         local bp_nudges = bp(net, data, learning_rate)
+         --local grad_nudges = grad(net, data, learning_rate, step)
+
+         -- compare bp and grad nudges
+         -- local diff = cmp_arr(bp_nudges, grad_nudges, function(a, b)
+         --     if a == nil and b == nil then return true end
+         --     if a == nil or b == nil then return false end
+         --     return (math.abs(a - b) < 0.0000001)
+         -- end)
+         printk("bp() and grad() nudge differences:")
+         printk(inspect(diff))
       end
    
       -- log status
@@ -133,6 +142,7 @@ end
 
 -- uses ff many times, slower
 function grad(net, data, rate, diff_step)
+   local nudges = {}
    local how_gvec = {}
    local ihw_gvec = {}
    local b_gvec = {}
@@ -147,8 +157,9 @@ function grad(net, data, rate, diff_step)
       local grad = rate * (loss2 - loss1) / step
       net.how[i] = w1
 
-      printk(fmt("grad(): net.how[%d] nudge is %f", i, -grad))
       how_gvec[i] = grad
+      table.insert(nudges, -grad)
+      printk(fmt("grad(): net.how[%d] nudge is %g", i, -grad))
    end
 
    for i, _ in ipairs(net.ihw) do
@@ -162,7 +173,8 @@ function grad(net, data, rate, diff_step)
       net.ihw[i] = w1
 
       ihw_gvec[i] = grad
-      printk(fmt("grad(): net.ihw[%d] nudge is %f", i, -grad))
+      table.insert(nudges, -grad)
+      printk(fmt("grad(): net.ihw[%d] nudge is %g", i, -grad))
    end
 
    for i, _ in ipairs(net.b) do
@@ -176,49 +188,50 @@ function grad(net, data, rate, diff_step)
       net.b[i] = b1
 
       b_gvec[i] = grad   
+      --table.insert(nudges, -grad)
    end
 
-   -- -- tune weights
-   -- for i, _ in ipairs(how_gvec) do
-   --    net.how[i] = net.how[i] - how_gvec[i]
-   -- end
-   -- for i, _ in ipairs(ihw_gvec) do
-   --    net.ihw[i] = net.ihw[i] - ihw_gvec[i]
-   -- end
+   -- tune weights
+   for i, _ in ipairs(how_gvec) do
+      net.how[i] = net.how[i] - how_gvec[i]
+   end
+   for i, _ in ipairs(ihw_gvec) do
+      net.ihw[i] = net.ihw[i] - ihw_gvec[i]
+   end
 
    -- -- tune biases
    -- for i, _ in ipairs(b_gvec) do
    --    net.b[i] = net.b[i] - b_gvec[i]
    -- end
+   return nudges
 end
-
-
--- TODO: compare grad() and bp() nudges:
---       - output an array of gradients for each fn
---       - compare the two arrays
---       - point out any differences
 
 -- TODO: tune biases as well
 -- uses backprop with derivatives, faster
 function bp(net, data, rate)
+   local nudges = {}
    local out = data.outputs
 
    -- tune hidden -> output weights
    local sum = {}
    for wi, _ in ipairs(net.how) do
-      local hni = 1 + math.floor((wi-1) / #net.o)
       local oni = 1 + (wi-1) % #net.o
+      local hni = 1 + math.floor((wi-1) / #net.o)
       -- (pd error) / (pd output)
       local e = d_err(net.o[oni], out[oni])
       -- (pd output) / (pd activation)
       local a = net.d_act_fns[2] and net.d_act_fns[2](net.o[oni])
                                   or 1
+
+      -- (pd activation) / (pd neuron)
+      sum[hni] = (sum[hni] or 0) + e * a * net.how[wi]
+
       -- (pd activation) / (pd weight) == net.h[hni]
       local grad = e * a * net.h[hni]
-      sum[hni] = (sum[hni] or 0) + grad
 
-      printk(fmt("bp(): net.how[%d] nudge is %f", wi, -grad * rate))
-      --net.how[wi] = net.how[wi] - grad * rate
+      printk(fmt("bp(): net.how[%d] nudge is %g", wi, -grad * rate))
+      table.insert(nudges, -grad * rate)
+      net.how[wi] = net.how[wi] - grad * rate
    end
 
    -- tune input -> hidden weights
@@ -228,7 +241,10 @@ function bp(net, data, rate)
       local a = net.d_act_fns[1] and net.d_act_fns[1](net.h[hni])
                                  or  1
       local grad = a * sum[hni] * net.i[ini]
-      printk(fmt("bp(): net.ihw[%d] nudge is %f", wi, -grad))
-      --net.ihw[wi] = net.ihw[wi] - grad * rate
+      printk(fmt("bp(): net.ihw[%d] nudge is %g", wi, -grad * rate))
+      table.insert(nudges, -grad * rate)
+      net.ihw[wi] = net.ihw[wi] - grad * rate
    end
+
+   return nudges
 end

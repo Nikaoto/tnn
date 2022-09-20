@@ -1,8 +1,9 @@
 local inspect = require("inspect")
 require("util")
 
-k=false
-function printk(msg)
+-- for debugging
+local k=false
+local function printk(msg)
    if k then print(msg) end
 end
 
@@ -60,8 +61,8 @@ function new_net(opts)
    -- hidden -> output weights
    net.how = rand_arr(wmin, wmax, #net.h * #net.o)
 
-   -- biases
-   net.b = rand_arr(wmin, wmax, 3)
+   -- biases (only in the hidden layer)
+   net.b = rand_arr(wmin, wmax, neuron_counts[2])
 
    return net
 end
@@ -81,7 +82,7 @@ function ff(net, inp)
       for j, _ in ipairs(net.i) do
          sum = sum + net.i[j] * net.ihw[i + (j-1) * #net.h]
       end
-      sum = sum + net.b[2]
+      sum = sum + net.b[i]
       net.h[i] = net.act_fns[1] and net.act_fns[1](sum) or sum
    end
 
@@ -91,7 +92,6 @@ function ff(net, inp)
       for j, _ in ipairs(net.h) do
          sum = sum + net.h[j] * net.how[i + (j-1) * #net.o]
       end
-      sum = sum + net.b[3]
       net.o[i] = net.act_fns[2] and net.act_fns[2](sum) or sum
    end
 
@@ -140,7 +140,10 @@ function train(net, training_data, opts)
    end
 end
 
--- uses ff many times, slower
+-- numerically calculates the partial derivatives for each weight with respect
+-- to the error. uses ff() many times and is therefore slow(er than bp()) but
+-- works just as well while being much simpler.
+-- returns array of nudges (for debugging purposes)
 function grad(net, data, rate, diff_step)
    local nudges = {}
    local how_gvec = {}
@@ -188,7 +191,7 @@ function grad(net, data, rate, diff_step)
       net.b[i] = b1
 
       b_gvec[i] = grad   
-      --table.insert(nudges, -grad)
+      table.insert(nudges, -grad)
    end
 
    -- tune weights
@@ -199,17 +202,19 @@ function grad(net, data, rate, diff_step)
       net.ihw[i] = net.ihw[i] - ihw_gvec[i]
    end
 
-   -- -- tune biases
-   -- for i, _ in ipairs(b_gvec) do
-   --    net.b[i] = net.b[i] - b_gvec[i]
-   -- end
+   -- tune biases
+   for i, _ in ipairs(b_gvec) do
+      net.b[i] = net.b[i] - b_gvec[i]
+   end
+
    return nudges
 end
 
--- TODO: tune biases as well
--- uses backprop with derivatives, faster
+-- uses backprop with derivatives, much faster than grad().
+-- returns array of nudges (for debugging purposes)
 function bp(net, data, rate)
    local nudges = {}
+   local bias_nudges = {}
    local out = data.outputs
 
    -- tune hidden -> output weights
@@ -244,6 +249,15 @@ function bp(net, data, rate)
       printk(fmt("bp(): net.ihw[%d] nudge is %g", wi, -grad * rate))
       table.insert(nudges, -grad * rate)
       net.ihw[wi] = net.ihw[wi] - grad * rate
+
+      -- tune biases in hidden layer
+      local bn = -a * sum[hni] * rate
+      table.insert(bias_nudges, bn)
+      net.b[hni] = net.b[hni] + bn
+   end
+
+   for _, v in ipairs(bias_nudges) do
+      table.insert(nudges, v)
    end
 
    return nudges

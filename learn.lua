@@ -3,11 +3,7 @@ local fmt = string.format
 require("tnn")
 require("util")
 
-local fn = function(a, b)
-   if a == 1 and b == 0 then return 1 end
-   if a == 0 and b == 1 then return 1 end
-   return 0
-end
+-- this net will discover the XOR function
 local net_opts = {
    neuron_counts = {2, 3, 1},
    act_fns = {sigmoid, sigmoid},
@@ -15,18 +11,18 @@ local net_opts = {
 }
 local train_opts = {
    shuffle = false,
-   epochs = 35000,
+   epochs = 2500,
    learning_rate = 0.1,
    log_freq = 0.01
 }
 
--- Initialize neural net
-print("Net")
+-- initialize neural net
+print("\nNet")
 math.randomseed(6929)
 local net = new_net(net_opts)
 print(inspect(net))
 
--- Generate training data
+-- training data (XOR function)
 local training_data = {
    { inputs={1,1}, outputs={0} },
    { inputs={1,0}, outputs={1} },
@@ -35,12 +31,12 @@ local training_data = {
 }
 local testing_data = training_data
 
--- Train
-print("Training")
+-- train
+print("\nTraining")
 train(net, training_data, train_opts)
 
--- Test
-print("Testing")
+-- test
+print("\nTesting")
 for i, _ in ipairs(testing_data) do
    print(fmt("test %i: %s", i, inspect(testing_data[i])))
    local pred = ff(net, testing_data[i].inputs)

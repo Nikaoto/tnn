@@ -51,9 +51,9 @@ function new_net(opts)
    }
 
    -- neuron layers
-   net.i = tbl_alloc(neuron_counts[1], 0)
-   net.h = tbl_alloc(neuron_counts[2], 1)
-   net.o = tbl_alloc(neuron_counts[3], 2)
+   net.i = tbl_alloc(neuron_counts[1], 1)
+   net.h = tbl_alloc(neuron_counts[2], 2)
+   net.o = tbl_alloc(neuron_counts[3], 3)
 
    -- input -> hidden weights
    net.ihw = rand_arr(wmin, wmax, #net.i * #net.h)
@@ -222,8 +222,10 @@ function bp(net, data, rate)
    for wi, _ in ipairs(net.how) do
       local oni = 1 + (wi-1) % #net.o
       local hni = 1 + math.floor((wi-1) / #net.o)
+
       -- (pd error) / (pd output)
       local e = d_err(net.o[oni], out[oni])
+
       -- (pd output) / (pd activation)
       local a = net.d_act_fns[2] and net.d_act_fns[2](net.o[oni])
                                   or 1
@@ -233,6 +235,9 @@ function bp(net, data, rate)
 
       -- (pd activation) / (pd weight) == net.h[hni]
       local grad = e * a * net.h[hni]
+
+      printk(("ni1=%i, ni2=%i, li=%i, wi=%i, e=%g, a=%g, grad=%g")
+               :format(hni, oni, 2, wi, e, a, grad * -rate))
 
       printk(fmt("bp(): net.how[%d] nudge is %g", wi, -grad * rate))
       table.insert(nudges, -grad * rate)

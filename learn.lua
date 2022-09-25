@@ -18,7 +18,7 @@ local train_opts = {
 
 -- initialize neural net
 print("\nNet")
-math.randomseed(6929)
+math.randomseed(1337)
 local net = new_net(net_opts)
 print(inspect(net))
 
